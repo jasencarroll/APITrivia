@@ -2,14 +2,14 @@ import os
 from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from werkzeug.exceptions import NotFound  # Import NotFound
 import random
 
-from models import setup_db, Question, Category
+from models import setup_db, db, Question, Category
 
 QUESTIONS_PER_PAGE = 10
 
 def create_app(test_config=None):
-    # create and configure the app
     app = Flask(__name__)
 
     if test_config is None:
@@ -27,7 +27,6 @@ def create_app(test_config=None):
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
         return response
 
-
     @app.route('/categories', methods=['GET'])
     def get_categories():
         categories = Category.query.all()
@@ -40,8 +39,6 @@ def create_app(test_config=None):
             'success': True,
             'categories': categories_dict
         })
-
-
 
     def paginate_questions(request, selection):
         page = request.args.get('page', 1, type=int)
@@ -73,22 +70,34 @@ def create_app(test_config=None):
         })
 
 
+
     @app.route('/questions/<int:question_id>', methods=['DELETE'])
     def delete_question(question_id):
         try:
-            question = Question.query.get(question_id)
-
+            print(f"Attempting to delete question with ID: {question_id}")
+            
+            # Use Session.get() to retrieve the question by its ID
+            question = db.session.get(Question, question_id)
+            print(f"Retrieved question: {question}")
+            
             if question is None:
-                abort(404)
+                print(f"Question with ID {question_id} not found. Raising NotFound exception.")
+                raise NotFound()  # Use the NotFound exception directly
 
+            # If the question exists, delete it
             question.delete()
+
             return jsonify({
                 'success': True,
                 'deleted': question_id
             })
 
-        except:
-            abort(422)
+        except NotFound as e:
+            raise e  # Re-raise the NotFound exception to ensure a proper 404 response
+        except Exception as e:
+            print(f"Error: {str(e)}")  # Log the error for debugging
+            abort(422)  # Handle all other errors with a 422
+
 
 
     @app.route('/questions', methods=['POST'])
@@ -115,7 +124,6 @@ def create_app(test_config=None):
         except:
             abort(422)
 
-
     @app.route('/questions/search', methods=['POST'])
     def search_questions():
         body = request.get_json()
@@ -133,10 +141,9 @@ def create_app(test_config=None):
 
         abort(404)
 
-
     @app.route('/categories/<int:category_id>/questions', methods=['GET'])
     def get_questions_by_category(category_id):
-        category = Category.query.get(category_id)
+        category = db.session.get(Category, category_id)  # Use Session.get()
 
         if category is None:
             abort(404)
@@ -158,9 +165,14 @@ def create_app(test_config=None):
         quiz_category = body.get('quiz_category', None)
 
         if quiz_category:
-            questions = Question.query.filter(Question.category == quiz_category['id']).filter(Question.id.notin_(previous_questions)).all()
-        else:
+            category = db.session.get(Category, quiz_category['id'])  # Use Session.get()
+            if category is None:
+                abort(404)
+
+        if quiz_category['id'] == 0:
             questions = Question.query.filter(Question.id.notin_(previous_questions)).all()
+        else:
+            questions = Question.query.filter(Question.category == quiz_category['id'], Question.id.notin_(previous_questions)).all()
 
         if len(questions) == 0:
             return jsonify({
@@ -168,13 +180,12 @@ def create_app(test_config=None):
                 'question': None
             })
 
-        question = random.choice(questions).format()
+        next_question = random.choice(questions).format()
 
         return jsonify({
             'success': True,
-            'question': question
+            'question': next_question
         })
-
 
     @app.errorhandler(404)
     def not_found(error):
@@ -192,6 +203,4 @@ def create_app(test_config=None):
             'message': 'Unprocessable entity'
         }), 422
 
-
     return app
-
