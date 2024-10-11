@@ -31,6 +31,26 @@ class TriviaTestCase(unittest.TestCase):
         """Executed after reach test"""
         pass
 
+        # Test GET /questions
+    def test_get_paginated_questions(self):
+        """Test getting paginated questions"""
+        res = self.client().get('/questions?page=1')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['questions'])
+        self.assertTrue(data['total_questions'])
+        self.assertEqual(data['success'], True)
+
+    def test_404_sent_requesting_beyond_valid_page(self):
+        """Test 404 error when requesting beyond valid page"""
+        res = self.client().get('/questions?page=1000')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 404)
+        self.assertEqual(data['success'], False)
+        self.assertEqual(data['message'], 'Resource not found')
+
     # Test GET /categories
     def test_get_categories(self):
         """Test fetching all categories"""
@@ -49,31 +69,6 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 404)
         self.assertEqual(data['success'], False)
         self.assertEqual(data['message'], 'Resource not found')
-
-    # Test POST /questions
-    def test_create_question(self):
-        """Test creating a new question"""
-        res = self.client().post('/questions', json=self.new_question)
-        data = json.loads(res.data)
-
-        self.assertEqual(res.status_code, 200)
-        self.assertTrue(data['created'])
-        self.assertEqual(data['success'], True)
-
-    def test_422_create_question(self):
-        """Test 422 error when creating question with missing data"""
-        incomplete_question = {
-            "question": "",
-            "answer": "Pacific Ocean",
-            "category": 1,
-            "difficulty": 2
-        }
-        res = self.client().post('/questions', json=incomplete_question)
-        data = json.loads(res.data)
-
-        self.assertEqual(res.status_code, 422)
-        self.assertEqual(data['success'], False)
-        self.assertEqual(data['message'], 'Unprocessable entity')
 
     # Test DELETE /questions/<id>
     def test_delete_question(self):
@@ -97,21 +92,48 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 404)
         self.assertEqual(data['success'], False)
         self.assertEqual(data['message'], 'Resource not found')
+        
+        # Test POST /questions
+    def test_create_question(self):
+        """Test creating a new question"""
+        res = self.client().post('/questions', json=self.new_question)
+        data = json.loads(res.data)
 
-    # Test GET /questions
-    def test_get_paginated_questions(self):
-        """Test getting paginated questions"""
-        res = self.client().get('/questions?page=1')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(data['created'])
+        self.assertEqual(data['success'], True)
+
+    def test_422_create_question(self):
+        """Test 422 error when creating question with missing data"""
+        incomplete_question = {
+            "question": "",
+            "answer": "Pacific Ocean",
+            "category": 1,
+            "difficulty": 2
+        }
+        res = self.client().post('/questions', json=incomplete_question)
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(data['success'], False)
+        self.assertEqual(data['message'], 'Unprocessable entity')
+        
+        # Success Test: Get questions for a valid category
+    def test_get_questions_by_category_success(self):
+        """Test getting questions for a valid category"""
+        res = self.client().get('/categories/1/questions')  # Assuming category with ID 1 exists
         data = json.loads(res.data)
 
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['questions'])
-        self.assertTrue(data['total_questions'])
+        self.assertEqual(data['current_category'], 'Science')
         self.assertEqual(data['success'], True)
+        self.assertTrue(data['total_questions'])
 
-    def test_404_sent_requesting_beyond_valid_page(self):
-        """Test 404 error when requesting beyond valid page"""
-        res = self.client().get('/questions?page=1000')
+    # Failure Test: Get questions for an invalid category
+    def test_get_questions_by_category_failure(self):
+        """Test 404 error when getting questions for a non-existent category"""
+        res = self.client().get('/categories/9999/questions')  # Assuming category with ID 9999 does not exist
         data = json.loads(res.data)
 
         self.assertEqual(res.status_code, 404)
@@ -138,7 +160,6 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(len(data['questions']), 0)  # Ensure no results are returned
         # No need to check for 'message' since this is not an error
 
-
     # Test POST /quizzes
     def test_play_quiz(self):
         """Test playing quiz with specific category"""
@@ -164,7 +185,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data['success'], False)
         self.assertEqual(data['message'], 'Resource not found')
 
-
+        
 # Make the tests conveniently executable
 if __name__ == "__main__":
     unittest.main()
