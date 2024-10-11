@@ -13,6 +13,8 @@
    This project uses NPM to manage software dependencies. NPM Relies on the package.json file located in the `frontend` directory of this repository. After cloning, open your terminal and run:
 
 ```bash
+nvm use 18
+export NODE_OPTIONS=--openssl-legacy-provider
 npm install
 ```
 

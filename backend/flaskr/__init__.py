@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -126,20 +127,36 @@ def create_app(test_config=None):
 
     @app.route('/questions/search', methods=['POST'])
     def search_questions():
+        # Step 2: Get the request body as JSON
         body = request.get_json()
-        search_term = body.get('searchTerm', None)
 
-        if search_term:
-            results = Question.query.filter(Question.question.ilike(f'%{search_term}%')).all()
+        # Step 3: Validate the request
+        if not body or 'searchTerm' not in body:
+            abort(422, description="Missing required field: 'searchTerm'.")
 
+        # Step 4: Get the search term from the request body
+        search_term = body.get('searchTerm')
+
+        # Step 5: Perform the search in the database (using ILIKE for case-insensitive search)
+        search_results = Question.query.filter(Question.question.ilike(f'%{search_term}%')).all()
+
+        # Step 6: If no results are found, return an empty list with a message
+        if len(search_results) == 0:
             return jsonify({
                 'success': True,
-                'questions': [question.format() for question in results],
-                'total_questions': len(results),
-                'current_category': None
+                'questions': [],
+                'total_questions': 0,
+                'current_category': None,
+                'message': 'No questions found matching the search term.'
             })
 
-        abort(404)
+        # Step 7: Format the results and return them
+        return jsonify({
+            'success': True,
+            'questions': [question.format() for question in search_results],
+            'total_questions': len(search_results),
+            'current_category': None
+        })
 
     @app.route('/categories/<int:category_id>/questions', methods=['GET'])
     def get_questions_by_category(category_id):
@@ -164,22 +181,33 @@ def create_app(test_config=None):
         previous_questions = body.get('previous_questions', [])
         quiz_category = body.get('quiz_category', None)
 
-        if quiz_category:
-            category = db.session.get(Category, quiz_category['id'])  # Use Session.get()
+        if not quiz_category:
+            abort(400, description="Category is required.")
+
+        # If quiz_category['id'] is not 0, fetch the specific category questions
+        if quiz_category['id'] != 0:
+            # Fetch the category from the database
+            category = db.session.get(Category, quiz_category['id'])
             if category is None:
-                abort(404)
+                abort(404, description=f"Category with ID {quiz_category['id']} not found.")
 
-        if quiz_category['id'] == 0:
-            questions = Question.query.filter(Question.id.notin_(previous_questions)).all()
+            # Fetch the questions for the specific category that aren't in previous_questions
+            questions = Question.query.filter(
+                Question.category == quiz_category['id'],
+                Question.id.notin_(previous_questions)
+            ).all()
         else:
-            questions = Question.query.filter(Question.category == quiz_category['id'], Question.id.notin_(previous_questions)).all()
+            # If quiz_category['id'] == 0, fetch questions from all categories
+            questions = Question.query.filter(Question.id.notin_(previous_questions)).all()
 
+        # Handle case where no questions remain
         if len(questions) == 0:
             return jsonify({
                 'success': True,
                 'question': None
             })
 
+        # Randomly select the next question
         next_question = random.choice(questions).format()
 
         return jsonify({
